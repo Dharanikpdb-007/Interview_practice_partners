@@ -77,6 +77,8 @@ def clear_chat_history():
     st.session_state.messages = []
     st.session_state.interview_started = False
     st.session_state.uploaded_file_processed = False
+    # CRITICAL FIX: Force a rerun to execute the initial question logic
+    st.rerun() 
 
 # Ensure initial session state is set
 if "chat_session" not in st.session_state:
