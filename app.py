@@ -102,7 +102,7 @@ st.divider()
 
 
 # ----------------------------------------------------------------------
-# 4. FILE UPLOAD AND CONTEXT SETUP (Unchanged)
+# 4. FILE UPLOAD AND CONTEXT SETUP
 # ----------------------------------------------------------------------
 
 uploaded_file = st.file_uploader(
@@ -211,8 +211,7 @@ if st.session_state.voice_mode:
         start_prompt="Click to Speak",
         stop_prompt="Recording...",
         just_once=True,
-        use_container_width=True,
-        # Speech-to-Text conversion is done using the SpeechRecognition library
+        # REMOVED: use_container_width=True (Caused TypeError)
         speech_to_text=True, 
         language='en', 
         key='mic_recorder'
