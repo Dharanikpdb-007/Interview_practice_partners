@@ -17,15 +17,21 @@ st.set_page_config(
 st.title("🗣️ AI Interview Partner (Voice Chat)")
 st.caption("Practice your technical skills with a persistent AI interviewer.")
 
-# 🔑 API Key Check
-try:
-    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
-    LLM_MODEL = "gemini-2.5-flash" 
-except KeyError:
-    st.error("Error: GEMINI_API_KEY not found in Streamlit Secrets.")
-    st.info("Please set the 'GEMINI_API_KEY' secret in your Streamlit Cloud settings.")
-    st.stop()
+# Define the model used
+LLM_MODEL = "gemini-2.5-flash" 
 
+# 🔑 API Client Management: Ensure client persists across reruns
+if "client" not in st.session_state:
+    try:
+        # Store the genai client in session state
+        st.session_state.client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    except KeyError:
+        st.error("Error: GEMINI_API_KEY not found in Streamlit Secrets.")
+        st.info("Please set the 'GEMINI_API_KEY' secret in your Streamlit Cloud settings.")
+        st.stop()
+        
+# Use the client from session state for all operations
+client = st.session_state.client
 
 # ----------------------------------------------------------------------
 # 2. CONFIGURATION: ROLES AND SYSTEM INSTRUCTIONS
@@ -57,7 +63,8 @@ ROLES = {
 
 # Function to initialize the chat session using the currently selected role
 def initialize_chat_session(role_prompt):
-    st.session_state.chat_session = client.chats.create(
+    # Use the client stored in session state
+    st.session_state.chat_session = st.session_state.client.chats.create(
         model=LLM_MODEL,
         config=genai.types.GenerateContentConfig(
             system_instruction=role_prompt
@@ -179,9 +186,9 @@ def generate_ai_response(prompt_text):
             st.session_state.messages.append({"role": "assistant", "content": full_response})
 
         except Exception as e:
+            # FIX: Only display the error. DO NOT try to send another message with the closed client.
             st.error(f"An error occurred with the AI response: {e}")
-            st.session_state.chat_session.send_message(f"Error: {e}") # Send error to session state
-            full_response = "Sorry, I ran into an error. Please try again."
+            full_response = "Sorry, I ran into an error. Please try again. The AI client connection may have been lost. Try starting a new interview."
 
 # ----------------------------------------------------------------------
 # 7. INITIAL QUESTION LOGIC (Uses new function)
@@ -212,7 +219,6 @@ if st.session_state.voice_mode:
         stop_prompt="Recording...",
         just_once=True,
         speech_to_text=True, 
-        # language='en', <-- REMOVED THIS LINE
         key='mic_recorder'
     )
     st.markdown("---")
