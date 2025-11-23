@@ -211,9 +211,8 @@ if st.session_state.voice_mode:
         start_prompt="Click to Speak",
         stop_prompt="Recording...",
         just_once=True,
-        # REMOVED: use_container_width=True (Caused TypeError)
         speech_to_text=True, 
-        language='en', 
+        # language='en', <-- REMOVED THIS LINE
         key='mic_recorder'
     )
     st.markdown("---")
