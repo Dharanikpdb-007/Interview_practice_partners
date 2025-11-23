@@ -122,14 +122,14 @@ if not st.session_state.interview_started:
             
             initial_prompt = "Start the interview now by asking your first question."
             
-            # FIX: Removed the 'stream=True' argument
             response = st.session_state.chat_session.send_message(
                 initial_prompt
             )
 
             full_response = ""
             for chunk in response:
-                if chunk.text:
+                # 🔑 FIX: Check if the 'text' attribute exists on the chunk
+                if hasattr(chunk, 'text'):
                     full_response += chunk.text
                     st.markdown(full_response + "▌") 
 
@@ -154,14 +154,14 @@ if prompt := st.chat_input("Type your response here..."):
         response_container = st.empty()
         full_response = ""
 
-        # FIX: Removed the 'stream=True' argument
         stream = st.session_state.chat_session.send_message(
             prompt
         )
 
         # Stream the response for better UX ("typing" effect)
         for chunk in stream:
-            if chunk.text:
+            # 🔑 FIX: Check if the 'text' attribute exists on the chunk
+            if hasattr(chunk, 'text'):
                 full_response += chunk.text
                 response_container.markdown(full_response + "▌") 
 
