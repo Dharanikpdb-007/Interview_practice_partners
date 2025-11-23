@@ -223,7 +223,8 @@ if st.session_state.voice_mode:
         # If speech-to-text worked, use the transcribed text as the prompt
         user_prompt = audio_data.get('text')
     else:
-        user_prompt = None
+        # If there is no new transcribed text, use the standard chat input for text fallback
+        user_prompt = st.chat_input("Type your response here (Voice Mode Active)...")
 
 else:
     # 📝 Standard Text Input Area
@@ -242,5 +243,5 @@ if user_prompt:
     # 3. Generate the AI response using the reusable function
     generate_ai_response(user_prompt)
 
-# This video explains how to use Streamlit's selectbox, which is used to implement the multiple roles feature.
-[Streamlit Shorts: How to make a select box](https://www.youtube.com/watch?v=8-GavXeFlEA)
+# Informational comment about the voice feature source
+# This video explains how to use Streamlit's selectbox, which is used to implement the multiple roles feature: [Streamlit Shorts: How to make a select box](https://www.youtube.com/watch?v=8-GavXeFlEA)
