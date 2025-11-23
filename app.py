@@ -186,15 +186,15 @@ def generate_ai_response(prompt_text):
             st.session_state.messages.append({"role": "assistant", "content": full_response})
 
         except Exception as e:
-            # FIX: Only display the error. DO NOT try to send another message with the closed client.
+            # Only display the error.
             st.error(f"An error occurred with the AI response: {e}")
             full_response = "Sorry, I ran into an error. Please try again. The AI client connection may have been lost. Try starting a new interview."
 
 # ----------------------------------------------------------------------
 # 7. INITIAL QUESTION LOGIC (Uses new function)
 # ----------------------------------------------------------------------
-
-if not st.session_state.interview_started:
+# FIX: Ensure it only runs if the interview hasn't started AND the message list is truly empty.
+if not st.session_state.interview_started and not st.session_state.messages:
     
     initial_prompt = "Start the interview now by asking your first question."
     
@@ -246,6 +246,3 @@ if user_prompt:
 
     # 3. Generate the AI response using the reusable function
     generate_ai_response(user_prompt)
-
-# Informational comment about the voice feature source
-# This video explains how to use Streamlit's selectbox, which is used to implement the multiple roles feature: [Streamlit Shorts: How to make a select box](https://www.youtube.com/watch?v=8-GavXeFlEA)
