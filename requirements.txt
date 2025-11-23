@@ -1,7 +1,7 @@
 streamlit>=1.30.0
 google-genai
 Pillow
-streamlit-mic-recorder
+streamlit-mic-recorder 
 streamlit-TTS
-pydub
-gTTS
+pydub                  
+gTTS                  
