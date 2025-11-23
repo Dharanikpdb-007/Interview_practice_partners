@@ -1,57 +1,70 @@
 import streamlit as st
-from openai import OpenAI
-import base64 
+# New Imports for Google Gemini API and Image Handling
+from google import genai
+from PIL import Image
+import io 
 
 # ----------------------------------------------------------------------
 # 1. INITIAL SETUP AND API KEY CHECK
 # ----------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="AI Interview Partner", 
+    page_title="AI Interview Partner (Gemini Free)", 
     layout="centered"
 )
 
-st.title("🤖 AI Interview Partner")
+st.title("🤖 AI Interview Partner (Free Gemini)")
 st.caption("Practice your technical skills with a persistent AI interviewer.")
 
-# 🔑 API Key Check (CRITICAL DEPLOYMENT STEP)
-# This code securely looks for your OPENAI_API_KEY in Streamlit Secrets.
+# 🔑 API Key Check (Now looks for GEMINI_API_KEY)
 try:
-    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    LLM_MODEL = "gpt-4o" # Multimodal model for image context
+    # Use the 'google-genai' client
+    client = genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+    LLM_MODEL = "gemini-2.5-flash" 
 except KeyError:
-    st.error("Error: OpenAI API Key (OPENAI_API_KEY) not found in Streamlit Secrets.")
-    st.info("Please set the 'OPENAI_API_KEY' secret in your Streamlit Cloud settings.")
+    st.error("Error: GEMINI_API_KEY not found in Streamlit Secrets.")
+    st.info("Please set the 'GEMINI_API_KEY' secret in your Streamlit Cloud settings.")
     st.stop()
 
 
 # ----------------------------------------------------------------------
-# 2. SESSION STATE MANAGEMENT (THE BUG FIX)
+# 2. SESSION STATE MANAGEMENT AND CHAT INITIALIZATION
 # ----------------------------------------------------------------------
 
-# 🧠 CRITICAL FIX: This block MUST run before any other code tries to 
-# read st.session_state to avoid the AttributeError.
-if "messages" not in st.session_state:
-    # Set the initial AI persona
-    system_prompt = (
-        "You are a professional, expert-level technical interviewer for a "
-        "Senior Python Developer position. Your goal is to assess the candidate's "
-        "knowledge and problem-solving skills. Ask only one question at a time. "
-        "Do not provide the answer or solutions. Provide constructive feedback "
-        "or a follow-up question based on the user's response."
-        "Your first response must be the very first interview question."
+# System instruction to define the interview persona
+SYSTEM_INSTRUCTION = (
+    "You are a professional, expert-level technical interviewer for a "
+    "Senior Python Developer position. Your goal is to assess the candidate's "
+    "knowledge and problem-solving skills. Ask only one question at a time. "
+    "Do not provide the answer or solutions. Provide constructive feedback "
+    "or a follow-up question based on the user's response."
+)
+
+# 🧠 CRITICAL FIX: Initialize chat session and history
+if "chat_session" not in st.session_state:
+    
+    # Initialize the Gemini Chat Session with the system instruction
+    st.session_state.chat_session = client.chats.create(
+        model=LLM_MODEL,
+        config=genai.types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION
+        )
     )
-    st.session_state.messages = [
-        {"role": "system", "content": system_prompt}
-    ]
+    # Initialize a list to track user/assistant history for display
+    st.session_state.messages = []
     st.session_state.interview_started = False
     st.session_state.uploaded_file_processed = False 
-    
 
 # Function to clear history (used by the button)
 def clear_chat_history():
-    # Only keep the original system prompt
-    st.session_state.messages = [st.session_state.messages[0]]
+    # Re-initialize the chat session
+    st.session_state.chat_session = client.chats.create(
+        model=LLM_MODEL,
+        config=genai.types.GenerateContentConfig(
+            system_instruction=SYSTEM_INSTRUCTION
+        )
+    )
+    st.session_state.messages = []
     st.session_state.interview_started = False
     st.session_state.uploaded_file_processed = False
     
@@ -60,11 +73,11 @@ st.divider()
 
 
 # ----------------------------------------------------------------------
-# 3. FILE UPLOAD AND CONTEXT SETUP (Multimodal Support)
+# 3. FILE UPLOAD AND CONTEXT SETUP
 # ----------------------------------------------------------------------
 
 uploaded_file = st.file_uploader(
-    "Upload your Resume (PNG, JPG) or Job Description (Text/PDF) for context (Optional)", 
+    "Upload your Resume (PNG, JPG) for context (Optional)", 
     type=['png', 'jpg', 'jpeg']
 )
 
@@ -72,86 +85,70 @@ if uploaded_file and not st.session_state.uploaded_file_processed:
     st.session_state.uploaded_file_processed = True
     
     try:
-        # Read and encode the file into a Base64 string for the API call
-        file_bytes = uploaded_file.read()
-        base64_image = base64.b64encode(file_bytes).decode('utf-8')
+        # Read the uploaded file into a PIL Image object
+        image_bytes = uploaded_file.read()
+        image_stream = io.BytesIO(image_bytes)
+        image = Image.open(image_stream)
         
-        # Define the content for the multimodal LLM
-        image_content = {
-            "type": "image_url",
-            "image_url": {"url": f"data:{uploaded_file.type};base64,{base64_image}"}
-        }
-        text_content = {
-            "type": "text",
-            "content": (
-                "The user has uploaded a file for context. Analyze this document/image. "
-                "Your interview questions must now be based on the content of this file, "
-                "targeting the skills and experience listed. Do not explicitly mention the "
-                "image or file; just use its content to guide the interview."
+        # Prepare the multimodal message content
+        prompt = (
+            "Analyze this resume image. The interview questions you generate "
+            "must be directly based on the skills and experience listed in this resume. "
+            "Do not mention the image directly, just use it for context."
+        )
+        
+        # Send the image and prompt to the Gemini model immediately to set context
+        with st.spinner("Analyzing resume..."):
+            st.session_state.chat_session.send_message(
+                [prompt, image]
             )
-        }
-
-        # Insert a new system message with the image context right after the main system prompt (index 1)
-        st.session_state.messages.insert(1, {"role": "system", "content": [text_content, image_content]})
-        
-        st.success("File uploaded and successfully added to the AI's context! The interviewer will now use this information.")
-        st.image(uploaded_file, caption="Document added for context.", width=250)
+            
+        st.success("Resume analyzed and successfully added to the AI's context!")
+        st.image(image, caption="Document added for context.", width=250)
 
     except Exception as e:
-        st.error(f"Error processing file: {e}")
+        st.error(f"Error processing file. Please ensure it's a valid image. Error: {e}")
         st.session_state.uploaded_file_processed = False 
-
 
 # ----------------------------------------------------------------------
 # 4. DISPLAY EXISTING MESSAGES
 # ----------------------------------------------------------------------
 
-# Display all past messages in the conversation history
+# Display all past messages stored in the session state list
 for message in st.session_state.messages:
-    # Skip displaying the hidden 'system' messages
-    if message["role"] != "system":
-        with st.chat_message(message["role"]):
-            # Content can be a string (regular chat) or a list (multimodal system prompt)
-            if isinstance(message["content"], str):
-                st.markdown(message["content"])
-            else:
-                 # If it's the multimodal system prompt, only display the text part
-                 for item in message["content"]:
-                    if item["type"] == "text":
-                        st.markdown(item["content"])
-
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
 # ----------------------------------------------------------------------
 # 5. INITIAL QUESTION LOGIC
 # ----------------------------------------------------------------------
 
-# If the app just loaded and the interview hasn't started, prompt the LLM to ask the first question
-if not st.session_state.interview_started and len([m for m in st.session_state.messages if m["role"] != "system"]) == 0:
+# If the app just loaded, send a starter prompt to get the first question
+if not st.session_state.interview_started:
     
     with st.chat_message("assistant"):
         with st.spinner("Preparing your interview..."):
             
-            # Call the LLM with the system context (including image if uploaded)
-            stream = client.chat.completions.create(
-                model=LLM_MODEL,
-                messages=[
-                    {"role": m["role"], "content": m["content"]}
-                    for m in st.session_state.messages
-                ],
-                stream=True,
+            # Send an initial message to start the conversation based on the system prompt
+            # We use the same context message that was sent with the image (if applicable)
+            initial_prompt = "Start the interview now by asking your first question."
+            
+            # Use the streaming API for better UX
+            response = st.session_state.chat_session.send_message(
+                initial_prompt,
+                stream=True
             )
 
             full_response = ""
-            for chunk in stream:
-                if chunk.choices:
-                    content = chunk.choices[0].delta.content
-                    if content:
-                        full_response += content
-                        st.markdown(full_response + "▌") 
+            for chunk in response:
+                if chunk.text:
+                    full_response += chunk.text
+                    st.markdown(full_response + "▌") 
 
             st.markdown(full_response) 
 
-        # Add the first question to history
+        # Add the initial prompt (user role) and the first question (assistant role) to history for display
+        st.session_state.messages.append({"role": "user", "content": initial_prompt})
         st.session_state.messages.append({"role": "assistant", "content": full_response})
         st.session_state.interview_started = True
 
@@ -161,38 +158,29 @@ if not st.session_state.interview_started and len([m for m in st.session_state.m
 # ----------------------------------------------------------------------
 
 if prompt := st.chat_input("Type your response here..."):
-    # 1. Add the new user message to the session history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    
-    # 2. Display the user message
+    # 1. Display the user message
     with st.chat_message("user"):
         st.markdown(prompt)
-
-    # 3. Generate the AI response
+    
+    # 2. Generate the AI response
     with st.chat_message("assistant"):
         response_container = st.empty()
         full_response = ""
 
-        # 🔑 Pass the ENTIRE history to the LLM for context
-        stream = client.chat.completions.create(
-            model=LLM_MODEL, 
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
+        # 🔑 FIX: Send the new prompt to the chat session. History is managed automatically!
+        stream = st.session_state.chat_session.send_message(
+            prompt,
+            stream=True
         )
 
         # Stream the response for better UX ("typing" effect)
         for chunk in stream:
-            if chunk.choices:
-                content = chunk.choices[0].delta.content
-                if content:
-                    full_response += content
-                    response_container.markdown(full_response + "▌") 
+            if chunk.text:
+                full_response += chunk.text
+                response_container.markdown(full_response + "▌") 
 
         response_container.markdown(full_response) # Final response without cursor
 
-    # 4. Add the final AI response to the session history for persistence
+    # 3. Add both messages to the Streamlit display history list
+    st.session_state.messages.append({"role": "user", "content": prompt})
     st.session_state.messages.append({"role": "assistant", "content": full_response})
-    st.session_state.interview_started = True
